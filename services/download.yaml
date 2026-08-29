@@ -49,7 +49,7 @@ services:
   # 2.11, the 5.2 login change) are handled by Sonarr ≥4.0.17 and
   # Radarr 6.x. Re-verify Sonarr/Radarr connectivity after major bumps.
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.2.3@sha256:304b19cf94bf4fda534e0b086cab9c5f1a9e139a8180c05c0ad7d2ba1526fa99
+    image: lscr.io/linuxserver/qbittorrent:14.3.9@sha256:751f377e7bcfe8e7aee1d219049720690510f488bba649f8ceffcd911e83d908
     container_name: qbittorrent
     environment:
       - PUID=${PUID}
