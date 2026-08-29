@@ -59,12 +59,15 @@
       automerge: false,
     },
     {
-      // The registry still carries an ancient Ubuntu-era `20.04.1` tag
-      // (last pushed 2021), which docker versioning reads as
-      // "qbittorrent v20" and proposes as a major upgrade — merging it
-      // would be a four-year rollback. Cap the range below it.
+      // The registry still carries two families of ancient junk tags
+      // that docker versioning reads as huge major upgrades: `20.04.1`
+      // (Ubuntu-era, last pushed 2021) and `14.3.x` (2021-era builds of
+      // qBittorrent 4.3.x published with a stray leading "1", last
+      // pushed 2022). Merging either would be a multi-year rollback.
+      // Nothing real exists between major 5 and 14, so cap below the
+      // junk while leaving genuine future majors reachable.
       matchPackageNames: ['lscr.io/linuxserver/qbittorrent'],
-      allowedVersions: '<20',
+      allowedVersions: '<14',
     },
   ],
 }
