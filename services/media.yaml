@@ -9,7 +9,7 @@
 services:
   # Request UI.
   seerr:
-    image: ghcr.io/seerr-team/seerr:v3.4.1
+    image: ghcr.io/seerr-team/seerr:v3.4.1@sha256:f4768de5f616248d723e05891f3345a1402123775d03bf0890dbfedc0831bda1
     container_name: seerr
     environment:
       - PUID=${PUID}
