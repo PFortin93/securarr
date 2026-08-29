@@ -1,0 +1,16 @@
+# Decrypted secrets. Only the .enc.env versions belong in git.
+secrets/*.env
+!secrets/*.enc.env
+
+# age private keys, if one ever lands here by accident
+*.agekey
+key.txt
+keys.txt
+deploy.key
+
+.DS_Store
+
+# Generated from host/butane-*.yaml. An artifact, not source — and it is
+# what gets handed to the hypervisor, so it stays out of git.
+ignition.json
+*.ign

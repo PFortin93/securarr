@@ -1,0 +1,28 @@
+# Plex host — one of two stacks in this repo.
+#
+#   docker compose -f compose.plex.yaml up -d
+#
+# The other is compose.yaml, which is everything else. Ideally they
+# deploy to different hosts (or VMs) on different network segments; each
+# host runs exactly one, selected by COMPOSE_FILE in /etc/securarr/env.
+# Nothing stops you running both on one machine while you get started —
+# the split costs nothing and is ready when you want the isolation.
+#
+# Why split at all: Plex is the only service exposed directly to the
+# internet, so it is the one to assume gets compromised eventually.
+# Giving it its own host, its own VLAN, and a read-only view of the
+# library bounds what that compromise is worth.
+
+name: plex
+
+include:
+  # One include item, two files: a path LIST merges them as base +
+  # override, which every Compose version accepts. Two separate include
+  # items each defining services.plex is rejected by older Compose
+  # ("conflicts with imported resource") — CI runners often carry exactly
+  # such a version, even though newer local versions merge it silently.
+  # The GPU wiring lives in the profile; the arr host has no profile.
+  - path:
+      - services/plex.yaml
+      - ${HOST_PROFILE}
+    project_directory: .

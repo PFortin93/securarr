@@ -1,0 +1,106 @@
+# Ingress for the media stack — one subdomain per app under {$DOMAIN}.
+#
+# Nothing in this file is reachable from the internet directly. There is
+# no port forward to this proxy at all. External access arrives through
+# the Cloudflare tunnel, where Access authenticates first — including
+# guests, who get a one-time PIN by email and need no Cloudflare account
+# of their own.
+#
+# Plex is the deliberate exception and does not sit in this path. Native
+# clients (Apple TV, Roku, phones) cannot complete a browser auth flow,
+# so Plex cannot go behind Access at all; it keeps its own port forward
+# and its own TLS. The block below is for LAN and tunnel browser access
+# only.
+#
+# Certificates come from Let's Encrypt via the Cloudflare DNS-01
+# challenge — a TXT record, not an inbound request — so no port needs
+# opening to issue or renew one.
+{
+	# Let's Encrypt sends expiry warnings here. Use an address you read.
+	email {$ACME_EMAIL}
+}
+
+# Applied to every site. The source-address guard lives in here rather
+# than being opted into per block, so that forgetting it is impossible
+# rather than merely discouraged.
+#
+# It is a backstop, not the boundary — Cloudflare Access is the boundary.
+# What it buys is that if a 443 forward ever appears at the router, by
+# accident or by UPnP, none of these hostnames answer it. LAN clients and
+# the cloudflared container are private and pass through; anything with a
+# public source address has the connection aborted, with no response and
+# no confirmation the hostname exists.
+(app) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	@public not remote_ip private_ranges
+	abort @public
+}
+
+# Only subdomains are routed here — a wildcard *.{$DOMAIN} DNS record
+# covers subdomains, not the apex, so the bare domain stays free for
+# whatever else you point it at.
+
+# ─── Requests ─────────────────────────────────────────────────────────
+# Guest-facing. The Access policy on this hostname can allow one-time
+# PIN for your users' email addresses; everything below can require
+# your own account.
+seerr.{$DOMAIN}, seerr.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy seerr:5055
+}
+
+# ─── Library management ───────────────────────────────────────────────
+sonarr.{$DOMAIN}, sonarr.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy sonarr:8989
+}
+
+radarr.{$DOMAIN}, radarr.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy radarr:7878
+}
+
+bazarr.{$DOMAIN}, bazarr.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy bazarr:6767
+}
+
+prowlarr.{$DOMAIN}, prowlarr.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy prowlarr:9696
+}
+
+# ─── Downloads ────────────────────────────────────────────────────────
+sabnzbd.{$DOMAIN}, sabnzbd.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy sabnzbd:8080
+}
+
+# qbittorrent has no network stack of its own — it lives inside gluetun's
+# namespace, so its WebUI answers on the gluetun container.
+qbittorrent.{$DOMAIN}, qbittorrent.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy gluetun:8081
+}
+
+# ─── Playback ─────────────────────────────────────────────────────────
+# Browser convenience only. Plex's real remote access is its own port
+# forward and does not come through here.
+#
+# {$PLEX_HOST} is `host.docker.internal` in the single-host layout, and
+# the Plex host's address in the two-host one.
+plex.{$DOMAIN} {
+	import app
+	reverse_proxy {$PLEX_HOST}:32400
+}
+
+tautulli.{$DOMAIN}, tautulli.{$REMOTE_DOMAIN} {
+	import app
+	reverse_proxy tautulli:8181
+}

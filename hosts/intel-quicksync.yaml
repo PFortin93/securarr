@@ -1,0 +1,23 @@
+# Hardware profile: Intel iGPU via Quick Sync instead of a discrete
+# card. Select it by setting HOST_PROFILE in .env.
+#
+# Quick Sync needs the render node passed in, and the container's user
+# must be in the host's `render` group. That group's gid is not
+# consistent across distributions — 993 on some, 104 on others — and
+# getting it wrong produces no error, just silent CPU transcoding. Check
+# it on the target machine before switching:
+#
+#     getent group render
+#
+# and set RENDER_GID in .env to match.
+#
+# 12th-gen and newer Intel graphics need a reasonably current kernel and
+# firmware for full AV1 and HEVC support; verify inside the container
+# with `ls -l /dev/dri` and Plex's transcoder logs rather than assuming.
+
+services:
+  plex:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${RENDER_GID}

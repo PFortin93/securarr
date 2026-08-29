@@ -1,0 +1,49 @@
+# The user-facing tier on the arr host: Seerr takes requests, Tautulli
+# reports on playback.
+#
+# Plex is not here — it has its own stack (compose.plex.yaml), ideally on
+# its own host. Both of these reach it at ${PLEX_HOST}; with the two-host
+# layout that crossing should be inbound-only at your firewall, so a
+# compromised Plex cannot reach them back.
+
+services:
+  # Request UI.
+  seerr:
+    image: ghcr.io/seerr-team/seerr:v3.4.1
+    container_name: seerr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_DIRECTORY}/seerr:/app/config
+    ports:
+      - ${BIND_ADDRESS}:5055:5055
+    # Configure its Sonarr/Radarr connections by container name
+    # (http://sonarr:8989), never by host address — see services/arr.yaml.
+    networks:
+      - securarr
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Playback statistics. Reaches Plex at ${PLEX_HOST}, same as Seerr.
+  tautulli:
+    image: lscr.io/linuxserver/tautulli:2.18.1
+    container_name: tautulli
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_DIRECTORY}/tautulli:/config
+    ports:
+      - ${BIND_ADDRESS}:8181:8181
+    networks:
+      - securarr
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

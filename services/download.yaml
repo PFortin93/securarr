@@ -1,0 +1,123 @@
+# Acquisition path: everything that reaches the public internet for
+# content, plus the VPN that torrent traffic is confined to.
+#
+# qbittorrent has no network stack of its own — it runs inside gluetun's
+# namespace, so if gluetun dies qbittorrent has no route out rather than
+# leaking. That also means qbittorrent's WebUI port is published on
+# gluetun, not on qbittorrent.
+
+services:
+  # WireGuard tunnel. Torrent traffic is confined to this container.
+  gluetun:
+    image: qmcgaw/gluetun:v3.41.3
+    container_name: gluetun
+    # NET_ADMIN is the one capability gluetun genuinely needs — it builds
+    # the WireGuard interface and the kill-switch iptables rules. Dropping
+    # everything else is verified: without NET_ADMIN it exits with
+    # "NET_ADMIN capability is missing", and with only NET_ADMIN it gets
+    # all the way to complaining about the VPN key, which is a config
+    # error rather than a permissions one.
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN]
+    security_opt:
+      - no-new-privileges:true
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=wireguard
+      - VPN_PORT_FORWARDING=off
+      - PORT_FORWARD_ONLY=off
+      # Allow replies back to the Docker subnet (must match the network
+      # definition in compose.yaml), otherwise the WebUI is unreachable
+      # once the tunnel is up.
+      - FIREWALL_OUTBOUND_SUBNETS=172.60.0.0/24
+    # WIREGUARD_* live here — see secrets/vpn.env.example
+    env_file:
+      - secrets/vpn.env
+    ports:
+      - ${BIND_ADDRESS}:8888:8888/tcp   # HTTP proxy
+      - ${BIND_ADDRESS}:8388:8388/tcp   # Shadowsocks
+      - ${BIND_ADDRESS}:8388:8388/udp   # Shadowsocks
+      - ${BIND_ADDRESS}:8003:8000/tcp   # gluetun admin
+      - ${BIND_ADDRESS}:8081:8081/tcp   # qbittorrent WebUI (see above)
+    restart: unless-stopped
+    networks:
+      - securarr
+
+  # Torrent client. The 5.x WebUI API changes (paused→stopped in API
+  # 2.11, the 5.2 login change) are handled by Sonarr ≥4.0.17 and
+  # Radarr 6.x. Re-verify Sonarr/Radarr connectivity after major bumps.
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.2.3
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8081
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+      - ${CONFIG_DIRECTORY}/qbittorrent:/config
+    # Shares gluetun's network namespace. Waiting for healthy means a
+    # gluetun restart can't leave qbittorrent attached to a dead stack.
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Usenet client. Deliberately NOT behind the VPN — usenet is over TLS
+  # to a paid provider, and routing it through gluetun costs throughput.
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:5.1.2
+    container_name: sabnzbd
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+      - ${CONFIG_DIRECTORY}/sabnzbd:/config
+      # Incomplete downloads land on local scratch, not the media array —
+      # which matters when the array is NFS.
+      - ${SCRATCH_DIRECTORY}/incomplete:/data/downloads/usenet/incomplete
+    ports:
+      - ${BIND_ADDRESS}:8080:8080
+    networks:
+      - securarr
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Watches the *arr queues and extracts finished archives in place.
+  unpackerr:
+    image: golift/unpackerr:0.15.2
+    container_name: unpackerr
+    user: ${PUID}:${PGID}
+    environment:
+      - TZ=${TZ}
+      - UN_LOG_FILE=/data/unpackerr.log
+      # Container names, not host addresses — these keep working with
+      # BIND_ADDRESS=127.0.0.1, which removes the host-port bindings an
+      # address-based config would depend on.
+      - UN_SONARR_0_URL=http://sonarr:8989
+      - UN_RADARR_0_URL=http://radarr:7878
+    # UN_*_API_KEY live here — the same file that sets the keys on Sonarr
+    # and Radarr themselves, so they cannot drift apart.
+    env_file:
+      - secrets/arr-keys.env
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr

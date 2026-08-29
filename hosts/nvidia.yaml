@@ -1,0 +1,16 @@
+# Hardware profile: NVIDIA GPU passed through for transcoding.
+#
+# Named for the hardware, not a host. This file is the ONLY place the
+# stack knows what machine it is running on. Everything in services/ is
+# hardware-agnostic. Moving to different hardware means writing a new
+# profile here and changing one line in .env — not touching the stack.
+#
+# Driver flavour matters: Pascal-era cards (GTX 10xx, Quadro P-series)
+# need the PROPRIETARY NVIDIA driver — the `-open` kernel modules are
+# Turing and newer only, and choosing wrong leaves the card unusable
+# without saying so. Plex just quietly falls back to CPU transcoding.
+# Always verify a transcode session actually shows `(hw)`.
+
+services:
+  plex:
+    gpus: all

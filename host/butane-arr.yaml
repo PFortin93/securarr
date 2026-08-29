@@ -1,0 +1,341 @@
+# Flatcar provisioning for the ARR host.
+#
+# The larger of the two nodes: thirteen services, secrets, ingress.
+# Provision it SECOND — host/butane-plex.yaml is the pilot, and any
+# mistake in this pattern is far cheaper to find there.
+#
+# Butane source; transpile to Ignition JSON before use — see
+# docs/flatcar.md. Ignition runs ONCE, on first boot. It is not
+# configuration management: changing this file does not change a running
+# node, it describes the next one you build. That is the whole model, and
+# it is why the stack itself is deployed by a systemd unit below rather
+# than by Ignition.
+#
+# NO SECRETS IN THIS FILE. It is committed. The deploy key and the age
+# key that decrypts secrets/ are placed out of band after first boot;
+# the sync script refuses to run without them.
+#
+# Search for REPLACE to find everything you must edit before use.
+
+variant: flatcar
+version: 1.1.0
+
+passwd:
+  users:
+    - name: core
+      ssh_authorized_keys:
+        # REPLACE with your own SSH public key.
+        - ssh-ed25519 AAAA...REPLACE... you@example.com
+
+storage:
+  directories:
+    - path: /var/lib/securarr/bin
+      mode: 0755
+    - path: /opt/extensions
+      mode: 0755
+    - path: /etc/securarr
+      mode: 0700
+    # Mount point for the config disk — the stack's only irreplaceable
+    # local state, on its own volume so the next OS rebuild is a
+    # detach-and-reattach rather than a copy.
+    # Under /var/lib, NOT /opt — systemd-sysext overlays /opt with a
+    # tmpfs when any extension ships /opt content, shadowing whatever
+    # is beneath.
+    - path: /var/lib/securarr
+      mode: 0755
+    - path: /mnt/media
+      mode: 0755
+    - path: /mnt/scratch
+      mode: 0755
+
+  files:
+    # ── Sysexts ──────────────────────────────────────────────────────
+    # Docker and containerd ship with Flatcar as sysexts, enabled by
+    # default — nothing to do for those.
+    #
+    # No GPU driver here: the GPU belongs to the Plex host. That makes
+    # this node entirely hardware-agnostic.
+
+    # ── Downloaded sysexts ───────────────────────────────────────────
+    # The Compose plugin is not part of the bundled Docker sysext.
+    - path: /opt/extensions/docker-compose-5.5.0-x86-64.raw
+      overwrite: true
+      mode: 0644
+      contents:
+        source: https://extensions.flatcar.org/extensions/docker-compose-5.5.0-x86-64.raw
+
+    # ── SOPS ─────────────────────────────────────────────────────────
+    # No sysext exists for it, and Flatcar has no package manager. It is
+    # a single static binary, so vendoring it is the simplest honest
+    # answer.
+    #
+    # NOT /opt/bin: systemd-sysext mounts a tmpfs over /opt when any
+    # merged extension carries /opt content, which silently shadows
+    # anything Ignition wrote there. /var/lib is overlay-free.
+    #
+    # `age` is deliberately NOT installed: sops has age support built in
+    # and only needs the key file.
+    - path: /var/lib/securarr/bin/sops
+      overwrite: true
+      mode: 0755
+      contents:
+        source: https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+
+    # ── Deploy script ────────────────────────────────────────────────
+    # git is used through a container rather than from the host, so this
+    # does not depend on whether Flatcar ships it.
+    - path: /var/lib/securarr/bin/securarr-sync
+      overwrite: true
+      mode: 0755
+      contents:
+        inline: |
+          #!/bin/bash
+          # Reconcile the running stack with git. Idempotent: safe to run
+          # on a timer, because every image carries an explicit tag.
+          set -euo pipefail
+
+          # sops lives here, and a systemd unit's PATH does not include it
+          export PATH="/var/lib/securarr/bin:$PATH"
+
+          REPO="${STACK_REPO:?set STACK_REPO in /etc/securarr/env}"
+          DIR=/var/lib/securarr/stack
+          AGE_KEY=/etc/securarr/age.key
+          DEPLOY_KEY=/etc/securarr/deploy.key
+
+          if [[ ! -s "$DEPLOY_KEY" ]]; then
+            echo "no deploy key at $DEPLOY_KEY — cannot pull the repo" >&2
+            exit 1
+          fi
+
+          if [[ "${NEEDS_SECRETS:-yes}" == "yes" && ! -s "$AGE_KEY" ]]; then
+            echo "no age key at $AGE_KEY — secrets cannot be decrypted" >&2
+            exit 1
+          fi
+
+          git() {
+            docker run --rm -v "$DIR:/git" -w /git \
+              -v "$DEPLOY_KEY":/deploy.key:ro \
+              -v /etc/securarr/known_hosts:/known_hosts:ro \
+              -e GIT_SSH_COMMAND="ssh -i /deploy.key -o UserKnownHostsFile=/known_hosts -o IdentitiesOnly=yes" \
+              alpine/git "$@"
+          }
+
+          if [[ -d "$DIR/.git" ]]; then
+            git pull --ff-only
+          else
+            git clone "$REPO" .
+          fi
+
+          cd "$DIR"
+          if [[ "${NEEDS_SECRETS:-yes}" == "yes" ]]; then
+            SOPS_AGE_KEY_FILE="$AGE_KEY" ./scripts/secrets decrypt
+          fi
+          docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+          # Dangling layers accumulate on the boot disk as image tags are
+          # bumped. Prune only untagged layers — the previous tagged
+          # image is left in place so a rollback does not have to
+          # re-pull.
+          docker image prune -f >/dev/null
+
+    # GitHub's published SSH host keys (from api.github.com/meta),
+    # pinned so the first clone cannot be MITM'd into trusting whatever
+    # answers. Public data; safe to commit.
+    - path: /etc/securarr/known_hosts
+      overwrite: true
+      mode: 0644
+      contents:
+        inline: |
+          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+          github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
+
+    # On a freshly formatted scratch disk this directory does not exist,
+    # and Docker auto-creates missing bind-mount sources AS ROOT — which
+    # the uid-1000 container then cannot write (SABnzbd's
+    # incomplete-download dir silently broken). tmpfiles.d runs after
+    # local-fs.target, so the mount is up before this creates the dir
+    # with correct ownership.
+    - path: /etc/tmpfiles.d/securarr-scratch.conf
+      overwrite: true
+      mode: 0644
+      contents:
+        inline: |
+          d /mnt/scratch/incomplete 0755 1000 1000 -
+
+    - path: /etc/securarr/env
+      overwrite: true
+      mode: 0600
+      contents:
+        inline: |
+          # Pulled read-only with the deploy key placed out of band at
+          # /etc/securarr/deploy.key, like the age key.
+          # REPLACE with your fork.
+          STACK_REPO=git@github.com:YOURUSER/securarr.git
+          # Which of the two stacks this node runs.
+          COMPOSE_FILE=compose.yaml
+          # This one has secrets; the Plex host does not.
+          NEEDS_SECRETS=yes
+
+    # ── Networking ───────────────────────────────────────────────────
+    # Static. Matched on MAC rather than interface name: Flatcar may
+    # enumerate virtio NICs in a different order, and a swap here would
+    # put the LAN address on the storage network without anything
+    # obviously breaking.
+    #
+    # This means the VM must be created with THESE MAC addresses. That
+    # discipline pays for itself anyway — DHCP reservations and firewall
+    # rules keyed on MAC keep working across rebuilds.
+    - path: /etc/systemd/network/10-lan.network
+      overwrite: true
+      mode: 0644
+      contents:
+        inline: |
+          [Match]
+          # REPLACE with the MAC of this VM's LAN NIC.
+          MACAddress=52:54:00:CC:DD:01
+
+          [Network]
+          # REPLACE addresses with your LAN (or, better, a VLAN of its
+          # own — this host holds the VPN key and the *arr apps).
+          Address=192.168.1.10/24
+          Gateway=192.168.1.1
+          DNS=192.168.1.1
+
+    # Storage network: NFS lives here. Deliberately no gateway — adding
+    # one would create a second default route. Delete this file if your
+    # media lives on a local disk instead.
+    - path: /etc/systemd/network/20-storage.network
+      overwrite: true
+      mode: 0644
+      contents:
+        inline: |
+          [Match]
+          # REPLACE with the MAC of this VM's storage NIC.
+          MACAddress=52:54:00:CC:DD:02
+
+          [Network]
+          # REPLACE with your storage segment address.
+          Address=10.0.10.10/24
+
+  # Downloading a sysext into /opt/extensions does nothing on its own —
+  # systemd-sysext only activates what it finds in /etc/extensions. This
+  # symlink is what actually turns the one above on, and its absence
+  # fails silently: no compose plugin, no error.
+  links:
+    - path: /etc/extensions/docker-compose.raw
+      overwrite: true
+      target: /opt/extensions/docker-compose-5.5.0-x86-64.raw
+      hard: false
+
+systemd:
+  units:
+    # ── Mounts ───────────────────────────────────────────────────────
+    # Unit name must match the mount point: /mnt/media -> mnt-media.mount
+    - name: mnt-media.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=NFS media library
+        Requires=network-online.target
+        After=network-online.target
+
+        [Mount]
+        # REPLACE with your NAS address and export path.
+        What=10.0.10.1:/mnt/tank/media
+        Where=/mnt/media
+        Type=nfs4
+        Options=_netdev,noatime
+
+        [Install]
+        WantedBy=multi-user.target
+
+    # The stack's state disk. Carried across rebuilds rather than copied.
+    - name: var-lib-securarr.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Stack configuration and databases
+
+        [Mount]
+        # By label, chosen at format time:
+        #     mkfs.ext4 -L arr-config /dev/<device>
+        # No UUID to discover; the label is part of this config.
+        What=/dev/disk/by-label/arr-config
+        Where=/var/lib/securarr
+        Type=ext4
+        Options=defaults
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: mnt-scratch.mount
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Local scratch for incomplete downloads
+
+        [Mount]
+        # Same ceremony as the config disk:  mkfs.ext4 -L arr-scratch
+        What=/dev/disk/by-label/arr-scratch
+        Where=/mnt/scratch
+        Type=ext4
+        Options=defaults
+
+        [Install]
+        WantedBy=multi-user.target
+
+    # ── Stack ────────────────────────────────────────────────────────
+    - name: securarr.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Reconcile the media stack from git
+        After=network-online.target docker.service var-lib-securarr.mount mnt-media.mount mnt-scratch.mount
+        Requires=docker.service
+        # Hard requirement, not just ordering. Without /mnt/media the
+        # *arr apps start and write into an empty directory, splitting
+        # the library; without /var/lib/securarr every app comes up with
+        # a blank configuration and begins helpfully recreating itself.
+        RequiresMountsFor=/var/lib/securarr /mnt/media /mnt/scratch
+
+        [Service]
+        Type=oneshot
+        # NO RemainAfterExit: with it, a oneshot stays 'active' after its
+        # first success, and both the timer and `systemctl start` are
+        # silent no-ops against an active unit — the CD loop runs exactly
+        # once and never again. Found the hard way.
+        EnvironmentFile=/etc/securarr/env
+        ExecStart=/var/lib/securarr/bin/securarr-sync
+
+        [Install]
+        WantedBy=multi-user.target
+
+    - name: securarr-sync.timer
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Pull and reconcile the media stack periodically
+
+        [Timer]
+        # Explicit Unit=: without it a timer triggers its NAME-twin
+        # (securarr-sync.service), which does not exist — the timer then
+        # dies silently at first fire and the CD loop never runs.
+        Unit=securarr.service
+        OnBootSec=5min
+        OnUnitActiveSec=10min
+
+        [Install]
+        WantedBy=timers.target
+
+    # ── OS updates ───────────────────────────────────────────────────
+    # Flatcar updates and reboots itself. Confine that to the small hours
+    # so a reboot does not land mid-stream.
+    - name: locksmithd.service
+      enabled: true
+      dropins:
+        - name: 10-reboot-window.conf
+          contents: |
+            [Service]
+            Environment=REBOOT_STRATEGY=reboot
+            Environment=LOCKSMITHD_REBOOT_WINDOW_START=04:00
+            Environment=LOCKSMITHD_REBOOT_WINDOW_LENGTH=2h

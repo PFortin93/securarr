@@ -1,0 +1,25 @@
+# Accepted vulnerabilities, each with a reason and an expiry. This file
+# is the risk-acceptance ledger: an entry here means a human judged the
+# exposure and wrote down why, and `expired_at` forces that judgment to
+# be remade — when a date passes and the vendor still has not shipped a
+# fix, the scan goes red again and someone must consciously re-accept.
+# Do not add an entry without a statement and an expiry.
+vulnerabilities:
+  # OpenSSL heap overflow, August 2026 wave. Fixed in alpine's
+  # openssl 3.5.6; unpackerr just has not rebuilt on it yet. Every
+  # other affected image cleared via vendor rebuilds. Short fuse —
+  # rebuilds for this are days, not months.
+  - id: CVE-2026-31789
+    statement: unpackerr base image awaiting vendor rebuild; internal-only service
+    expired_at: 2026-09-30
+
+  # seerr bundles vulnerable npm tar/handlebars in its server-side
+  # node_modules; fix requires a seerr release. seerr is the one
+  # remotely exposed app in this design, but it sits behind Cloudflare
+  # Access OTP — nothing anonymous reaches it.
+  - id: CVE-2026-59873
+    statement: awaiting seerr release; remote access gated by Access OTP
+    expired_at: 2026-11-30
+  - id: CVE-2026-33937
+    statement: awaiting seerr release; remote access gated by Access OTP
+    expired_at: 2026-11-30

@@ -1,0 +1,78 @@
+# Vulnerabilities arrive without commits, so this runs on a schedule as
+# well as on changes. A red run IS the alert — GitHub mails on failed
+# scheduled workflows — so the gate must be narrow enough to stay green
+# when there is nothing to do: CRITICAL only, fix released, not
+# accepted in .trivyignore.yaml. Baseline scans show these images
+# routinely carry fixable HIGHs (vendor-bundled libraries no operator
+# action can change), so a HIGH gate would be born red and train
+# everyone to ignore it. HIGHs still print in the log for reading, they
+# just cannot fail the run.
+#
+# Trivy is pinned like every other image; the custom.regex manager in
+# renovate.json5 keeps it current.
+name: scan
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 13 * * 1'   # weekly, Monday
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Scan the tree for leaked secrets
+        # Builtin rules plus trivy-secret.yaml — the builtins alone
+        # miss WireGuard and *arr key formats entirely.
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" aquasec/trivy:0.74.0 fs \
+            --scanners secret --secret-config /repo/trivy-secret.yaml \
+            --exit-code 1 /repo
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Stub gitignored secret files
+        run: for f in vpn arr-keys caddy cloudflared; do touch "secrets/$f.env"; done
+      - name: Scan every pinned image
+        # The image list is derived from the compose files, not
+        # maintained here — a new service is scanned automatically.
+        # Every image is scanned before failing so one bad image does
+        # not hide another.
+        run: |
+          { docker compose config --images
+            docker compose -f compose.plex.yaml config --images
+          } | sort -u > images.txt
+          failed=''
+          while IFS= read -r img; do
+            echo "::group::${img%%@*}"
+            # Print HIGH+CRITICAL for reading, but exit non-zero only
+            # for CRITICAL: --exit-code applies per --severity, so two
+            # passes share one cache and only the second one gates.
+            docker run --rm -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+              -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
+              aquasec/trivy:0.74.0 image --severity HIGH,CRITICAL \
+              --ignore-unfixed --ignorefile /.trivyignore.yaml \
+              --timeout 15m "$img"
+            docker run --rm -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+              -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
+              aquasec/trivy:0.74.0 image --severity CRITICAL \
+              --ignore-unfixed --ignorefile /.trivyignore.yaml \
+              --exit-code 1 --quiet --timeout 15m "$img" \
+              || failed="$failed $img"
+            echo "::endgroup::"
+          done < images.txt
+          if [ -n "$failed" ]; then
+            echo "Images with unaccepted fixable CRITICALs:$failed"
+            exit 1
+          fi

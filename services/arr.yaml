@@ -1,0 +1,134 @@
+# Library management. Prowlarr feeds indexers to the *arr apps; each
+# *arr owns one media type and hands downloads to the clients in
+# services/download.yaml.
+#
+# Services reach each other by container name — when you configure the
+# download clients and indexers inside each app's UI, use the names
+# (http://sonarr:8989, http://gluetun:8081 for qbittorrent, and so on),
+# never host addresses. Names survive host moves and the
+# BIND_ADDRESS=127.0.0.1 lockdown; addresses survive neither.
+
+services:
+  # Indexer manager — the single place indexers are configured.
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:2.5.2
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_DIRECTORY}/prowlarr:/config
+    ports:
+      - ${BIND_ADDRESS}:9696:9696
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr
+
+  # TV
+  #
+  # SONARR__AUTH__APIKEY in the secrets file below *sets* this app's API
+  # key rather than reading it back. Without that, the key is generated
+  # on first run and stored in config.xml — meaning a deploy onto an
+  # empty config directory would invent a new one and silently break
+  # recyclarr and unpackerr, which have the old value baked in.
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:4.0.19
+    container_name: sonarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    env_file:
+      - secrets/arr-keys.env
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+      - ${CONFIG_DIRECTORY}/sonarr:/config
+    ports:
+      - ${BIND_ADDRESS}:8989:8989
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr
+
+  # Movies — same API key story as Sonarr above.
+  radarr:
+    image: lscr.io/linuxserver/radarr:6.3.0
+    container_name: radarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    env_file:
+      - secrets/arr-keys.env
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+      - ${CONFIG_DIRECTORY}/radarr:/config
+    ports:
+      - ${BIND_ADDRESS}:7878:7878
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr
+
+  # Subtitles
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:1.6.0
+    container_name: bazarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${MEDIA_DIRECTORY}:/data
+      - ${CONFIG_DIRECTORY}/bazarr:/config
+    ports:
+      - ${BIND_ADDRESS}:6767:6767
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr
+
+  # Syncs TRaSH quality profiles into Sonarr and Radarr on a schedule.
+  #
+  # Pinned to an exact version deliberately, not floated to `:latest`.
+  # A floating tag is how an unattended recyclarr can silently run a
+  # stale build against a restructured upstream template repository and
+  # fail every sync for months without anyone noticing. Move the pin on
+  # purpose, and read the release notes when you do.
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:8.7.1
+    container_name: recyclarr
+    user: ${PUID}:${PGID}
+    environment:
+      - TZ=${TZ}
+    # RADARR_API_KEY and SONARR_API_KEY, read by `!env_var` in the config
+    # below — same file that sets them on the apps themselves, so they
+    # cannot drift apart.
+    env_file:
+      - secrets/arr-keys.env
+    volumes:
+      - ${CONFIG_DIRECTORY}/recyclarr:/config
+      # The one genuinely declarative config in this stack, overlaid
+      # read-only from git. /config itself stays writable because
+      # recyclarr needs it for its cache, logs and cloned templates.
+      - ./recyclarr/recyclarr.yml:/config/recyclarr.yml:ro
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - securarr

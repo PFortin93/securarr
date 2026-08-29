@@ -1,0 +1,40 @@
+# The arr host — one of two stacks in this repo (see compose.plex.yaml).
+# Segmented by role in the pipeline.
+#
+#   services/proxy.yaml      Caddy + cloudflared — TLS, routing, ZTNA
+#   services/download.yaml   VPN, torrent + usenet clients, extraction
+#   services/arr.yaml        indexer and the *arr library managers
+#   services/media.yaml      Seerr and Tautulli — the user-facing tier
+#
+# Everything still comes up with a plain `docker compose up -d` from
+# this directory — the split is for reading, not for partial deploys.
+#
+# Secrets are NOT in these files. Decrypt them first:
+#   ./scripts/secrets decrypt && docker compose up -d
+#
+# No hardware profile here: the GPU belongs to the Plex host, so this
+# stack is entirely hardware-agnostic and runs anywhere with Docker and
+# the mounts. compose.plex.yaml is the one that carries a host profile.
+
+name: securarr
+
+include:
+  - path: services/proxy.yaml
+    project_directory: .
+  - path: services/download.yaml
+    project_directory: .
+  - path: services/arr.yaml
+    project_directory: .
+  - path: services/media.yaml
+    project_directory: .
+
+networks:
+  securarr:
+    name: securarr
+    ipam:
+      config:
+        # Fixed subnet on purpose: gluetun's FIREWALL_OUTBOUND_SUBNETS
+        # (services/download.yaml) must name this range so the qbittorrent
+        # WebUI is reachable from inside the Docker network once the VPN
+        # kill switch is up. Change one, change both.
+        - subnet: 172.60.0.0/24

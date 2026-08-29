@@ -1,0 +1,14 @@
+# Which keys can decrypt what.
+#
+# REPLACE the placeholder below with your own age public key before
+# encrypting anything — see docs/secrets.md for generating one.
+# Add further recipients (a deploy host, a second workstation) by
+# appending their public keys, then re-encrypt so existing files pick
+# up the change:
+#
+#   ./scripts/secrets decrypt && ./scripts/secrets encrypt
+
+creation_rules:
+  - path_regex: secrets/.*\.env$
+    age: >-
+      age1REPLACEME_your_public_key_here

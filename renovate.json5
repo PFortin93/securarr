@@ -1,0 +1,60 @@
+// Renovate: reviewable updates with noise control.
+//
+// The failure mode this guards against is the silent auto-updater — a
+// Watchtower that crash-loops for months and nothing says so. The
+// design goal is not "auto-update everything" — it is "every image
+// change is a visible event, and the boring ones merge themselves."
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended'],
+  // github-actions keeps the SHA-pinned `uses:` lines current;
+  // custom.regex covers the tool images the workflows `docker run`
+  // (trivy, actionlint, zizmor), which no builtin manager sees.
+  enabledManagers: ['docker-compose', 'github-actions', 'custom.regex'],
+  customManagers: [
+    {
+      customType: 'regex',
+      managerFilePatterns: ['/^\\.github\\/workflows\\/.*\\.ya?ml$/'],
+      matchStrings: [
+        '(?<depName>aquasec/trivy|rhysd/actionlint|ghcr\\.io/zizmorcore/zizmor):(?<currentValue>[0-9][A-Za-z0-9.]*)',
+      ],
+      datasourceTemplate: 'docker',
+    },
+  ],
+  // The default pattern only matches compose*.yaml at the repo root —
+  // but every image: line lives in the included services/*.yaml files,
+  // which Renovate does not follow through `include:`. Without this it
+  // finds zero dependencies and reports success.
+  'docker-compose': {
+    managerFilePatterns: ['/(^|\\/)compose[^/]*\\.ya?ml$/', '/^services\\/.*\\.ya?ml$/'],
+  },
+  // Tag AND digest: the digest is what makes `compose up` deterministic.
+  // The repo ships tag-only so a fork without Renovate never carries
+  // stale digests; enabling this workflow makes Renovate's first run
+  // open PRs that add them, and it maintains them from then on.
+  pinDigests: true,
+  // No schedule gate and no minimumReleaseAge: PRs appear the moment an
+  // update exists, because a security fix (Plex especially) must be
+  // visible immediately. Letting non-urgent updates marinate is POLICY,
+  // not config: those PRs simply sit un-merged for a day or two, and
+  // nothing merges without a human. The daily cron paces the runs.
+  prHourlyLimit: 0,
+  prConcurrentLimit: 10,
+  packageRules: [
+    {
+      // The linuxserver images rebuild constantly: one grouped PR so
+      // the noise arrives as a single item. NO automerge anywhere —
+      // every merge is a human action, by supply-chain policy. The
+      // grouping keeps that decision cheap.
+      matchPackageNames: ['/^lscr\\.io\\/linuxserver\\//'],
+      groupName: 'linuxserver images',
+    },
+    {
+      // Break loudly when they break: gluetun takes torrenting down,
+      // Plex is the thing people actually watch, Caddy is the only way
+      // in. Individual PRs, human eyes, no automerge.
+      matchPackageNames: ['qmcgaw/gluetun', 'lscr.io/linuxserver/plex', 'ghcr.io/caddybuilds/caddy-cloudflare'],
+      automerge: false,
+    },
+  ],
+}

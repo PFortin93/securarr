@@ -1,0 +1,47 @@
+# Plex, alone in its own stack.
+#
+# Split out of the arr stack deliberately: Plex is the only service
+# exposed directly to the internet and the one to assume is compromised
+# eventually. Giving it its own host (or VM) and its own network segment
+# is the largest single control in this design.
+#
+# Note what is NOT here: no Caddy, no cloudflared, no secrets. Plex
+# terminates its own TLS and is reached directly on 32400, protected at
+# the edge by whatever your router offers (geo block, IDS/IPS) rather
+# than by anything in this file. Tautulli and Seerr stay on the arr host
+# and reach it inbound at ${PLEX_HOST}.
+
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:1.43.3
+    container_name: plex
+    # Host networking, for DLNA discovery and remote access. On a host
+    # that runs nothing else, this is a far smaller concession than it
+    # would be with a dozen other services on the same machine.
+    network_mode: host
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VERSION=docker
+    volumes:
+      # READ-ONLY — and if the library is an NFS export, export it ro to
+      # this host as well. Two independent controls: if either is ever
+      # flipped back to rw, the other still holds.
+      #
+      # Plex has no legitimate need to write to the library. Its
+      # metadata, artwork and database live in /config; transcoding goes
+      # to /transcode. A total compromise of the one internet-facing
+      # service therefore cannot encrypt or delete the media library,
+      # which is the outcome that would actually hurt.
+      - ${MEDIA_DIRECTORY}:/data:ro
+      - ${CONFIG_DIRECTORY}/plex:/config
+      # Transcode scratch on local disk, never on a network share.
+      - ${SCRATCH_DIRECTORY}/plex:/transcode
+    # Verified: with cap_drop ALL alone the s6 init cannot chown /config
+    # or drop to PUID, and Plex never starts. These five are the minimum.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

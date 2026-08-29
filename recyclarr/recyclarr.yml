@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+
+# TRaSH Guides quality profiles and custom formats, synced into Sonarr
+# and Radarr on a schedule.
+#
+# This file is the reason it is worth source-controlling anything in the
+# config directories at all. Everything else those apps store is state —
+# databases, queues, metadata caches. This is the part that is genuinely
+# *configuration*: declarative, small, and tedious to recreate by hand.
+#
+# API keys come from the environment via `!env_var`, supplied by
+# secrets/arr-keys.env. They are never written here.
+#
+# Mounted read-only over /config/recyclarr.yml, so recyclarr still gets a
+# writable /config for its cache, logs and cloned template repositories.
+#
+# This config uses v8 syntax: profiles are guide-backed via `trash_id`.
+# v8 removed official include templates — do not reintroduce
+# `include: - template:` for official templates; it will not resolve.
+
+radarr:
+  movies:
+    base_url: http://radarr:7878
+    api_key: !env_var RADARR_API_KEY
+
+    # Nudge sizes smaller across the board (affects each quality's
+    # min/pref/max curve). Lower = smaller files (0.0=min … 1.0=max).
+    quality_definition:
+      type: movie
+      preferred_ratio: 0.10
+
+    # Guide-backed profiles: a trash_id pulls the profile plus its custom
+    # formats and scores straight from the TRaSH guide.
+    quality_profiles:
+      - trash_id: d1d67249d3890e49bc12e275d989a7e9  # HD Bluray + WEB
+        reset_unmatched_scores:
+          enabled: true
+      - trash_id: 64fb5f9858489bdac2af690e27c8f42f  # UHD Bluray + WEB
+        reset_unmatched_scores:
+          enabled: true
+
+    # Optional: keep sizes sensible by not "upgrading" for huge audio
+    # stacks — leave audio CFs out so they don't push toward very large
+    # files.
+    custom_formats:
+      - trash_ids:
+          - b6832f586342ef70d9c128d40c07b872 # Bad dual groups
+          - 7357cf5161efbf8c4d5d0c30b4815ee2 # Obfuscated
+          - 5c44f52a8714fdd79bb4d98e2673be1f # Retags
+          - f537cf427b64c38c8e36298f657e4828 # Scene
+        assign_scores_to:
+          - name: HD Bluray + WEB
+          - name: UHD Bluray + WEB
+
+sonarr:
+  main:
+    base_url: http://sonarr:8989
+    api_key: !env_var SONARR_API_KEY
+
+    quality_definition:
+      type: series
+      preferred_ratio: 0.10   # smaller episodes; adjust if too tight
+
+    quality_profiles:
+      - trash_id: 72dae194fc92bf828f32cde7744e51a1  # WEB-1080p
+        reset_unmatched_scores:
+          enabled: true
+      - trash_id: d1498e7d189fbe6c7110ceaabb7473e6  # WEB-2160p
+        reset_unmatched_scores:
+          enabled: true
+
+    # Keep DV/HDR boosts conservative to avoid super-heavy WEB releases
+    custom_formats:
+      - trash_ids:
+          - 32b367365729d530ca1c124a0b180c64 # Bad dual groups
+          - e1a997ddb54e3ecbfe06341ad323c458 # Obfuscated
+          - 06d66ab109d4d2eddb2794d21526d140 # Retags
+          - 1b3994c551cbb92a2c781af061f4ab44 # Scene
+        assign_scores_to:
+          - name: WEB-1080p
+          - name: WEB-2160p
