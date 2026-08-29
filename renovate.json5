@@ -30,14 +30,16 @@
   },
   // Tag AND digest: the digest is what makes `compose up` deterministic.
   // The repo ships tag-only so a fork without Renovate never carries
-  // stale digests; enabling this workflow makes Renovate's first run
-  // open PRs that add them, and it maintains them from then on.
+  // stale digests; enabling Renovate (the hosted app, or self-hosted —
+  // see docs/renovate.md) makes its first run open PRs that add them,
+  // and it maintains them from then on.
   pinDigests: true,
   // No schedule gate and no minimumReleaseAge: PRs appear the moment an
   // update exists, because a security fix (Plex especially) must be
   // visible immediately. Letting non-urgent updates marinate is POLICY,
   // not config: those PRs simply sit un-merged for a day or two, and
-  // nothing merges without a human. The daily cron paces the runs.
+  // nothing merges without a human. The hosted app's scheduler (or
+  // your cron, if self-hosting) paces the runs.
   prHourlyLimit: 0,
   prConcurrentLimit: 10,
   packageRules: [
@@ -55,6 +57,14 @@
       // in. Individual PRs, human eyes, no automerge.
       matchPackageNames: ['qmcgaw/gluetun', 'lscr.io/linuxserver/plex', 'ghcr.io/caddybuilds/caddy-cloudflare'],
       automerge: false,
+    },
+    {
+      // The registry still carries an ancient Ubuntu-era `20.04.1` tag
+      // (last pushed 2021), which docker versioning reads as
+      // "qbittorrent v20" and proposes as a major upgrade — merging it
+      // would be a four-year rollback. Cap the range below it.
+      matchPackageNames: ['lscr.io/linuxserver/qbittorrent'],
+      allowedVersions: '<20',
     },
   ],
 }

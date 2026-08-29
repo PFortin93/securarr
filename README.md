@@ -44,7 +44,7 @@ secrets/*.env.example   templates for the four secret files
 secrets/*.enc.env       SOPS-encrypted secrets — committed (yours, not ours)
 scripts/secrets         encrypt / decrypt / edit helper
 docs/                   secrets workflow, Flatcar provisioning
-.github/workflows/      CI — validate, scan, renovate (see below)
+.github/workflows/      CI — validate, scan (see below)
 renovate.json5          update policy — grouped PRs, no automerge
 trivy-secret.yaml       custom leak-scan rules for this stack's secrets
 .trivyignore.yaml       risk-acceptance ledger for the image scan
@@ -138,9 +138,9 @@ If you adopt it, protect `main` accordingly: require review, or at
 minimum let CI gate merges — with a pull-based deploy loop, CI is the
 only thing standing between a bad merge and production.
 
-## CI
+## CI and updates
 
-Three workflows ship with the repo:
+Two workflows ship with the repo:
 
 - **validate** — every push and PR: lints and audits the workflows
   themselves (actionlint, zizmor), parses both compose stacks, and
@@ -152,13 +152,16 @@ Three workflows ship with the repo:
   `.trivyignore.yaml` — a risk ledger where every entry needs a
   statement and an expiry date, so acceptances are re-judged rather
   than forgotten.
-- **renovate** — daily: opens PRs for image and action updates. Needs a
-  `RENOVATE_TOKEN` repo secret (fine-grained PAT, Contents +
-  Pull requests read/write); until you add one, the workflow simply
-  fails and everything else works. Its first run will also pin image
-  digests on top of the version tags (`pinDigests` in
-  `renovate.json5`), making deploys fully deterministic — the repo
-  ships tag-only so forks without Renovate never carry stale digests.
+
+Image and action updates come from
+[Renovate](https://docs.renovatebot.com/), configured by
+`renovate.json5`: install the hosted
+[Renovate app](https://github.com/apps/renovate) on your fork and it
+just works — its first run pins image digests on top of the version
+tags, making deploys fully deterministic (the repo ships tag-only so
+forks without Renovate never carry stale digests). Prefer keeping the
+runs inside your own Actions? [docs/renovate.md](docs/renovate.md)
+covers self-hosting with your own GitHub App.
 
 Nothing automerges. Every image change is a visible event; the boring
 ones are grouped so reviewing them is cheap.
