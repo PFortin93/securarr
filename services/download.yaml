@@ -49,7 +49,7 @@ services:
   # 2.11, the 5.2 login change) are handled by Sonarr ≥4.0.17 and
   # Radarr 6.x. Re-verify Sonarr/Radarr connectivity after major bumps.
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.2.3@sha256:8d48fa8c619caadfb103f04efea8747e2a2762d6c7551690919cffb987e61cee
+    image: lscr.io/linuxserver/qbittorrent:5.2.3@sha256:2be038f3421f60f62e8e4bf201f66f385b68e4fbc9ed3ab79051069ea22e2650
     container_name: qbittorrent
     environment:
       - PUID=${PUID}
@@ -74,7 +74,7 @@ services:
   # Usenet client. Deliberately NOT behind the VPN — usenet is over TLS
   # to a paid provider, and routing it through gluetun costs throughput.
   sabnzbd:
-    image: lscr.io/linuxserver/sabnzbd:5.1.2@sha256:64c4c2b6ed546237451cbfec33aa8bac1396865c1a266dd247c02b36ffe27c62
+    image: lscr.io/linuxserver/sabnzbd:5.1.3@sha256:948ea3dc45d68943ec14b33ba37ffa1488da3e9837bf3ca0f75621e971614d85
     container_name: sabnzbd
     environment:
       - PUID=${PUID}
