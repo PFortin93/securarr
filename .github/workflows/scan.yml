@@ -32,7 +32,7 @@ jobs:
         # Builtin rules plus trivy-secret.yaml — the builtins alone
         # miss WireGuard and *arr key formats entirely.
         run: |
-          docker run --rm -v "$PWD:/repo:ro" aquasec/trivy:0.74.0 fs \
+          docker run --rm -v "$PWD:/repo:ro" aquasec/trivy:0.75.0 fs \
             --scanners secret --secret-config /repo/trivy-secret.yaml \
             --exit-code 1 /repo
   images:
@@ -61,12 +61,12 @@ jobs:
             # passes share one cache and only the second one gates.
             docker run --rm -v "$HOME/.cache/trivy:/root/.cache/trivy" \
               -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
-              aquasec/trivy:0.74.0 image --severity HIGH,CRITICAL \
+              aquasec/trivy:0.75.0 image --severity HIGH,CRITICAL \
               --ignore-unfixed --ignorefile /.trivyignore.yaml \
               --timeout 15m "$img"
             docker run --rm -v "$HOME/.cache/trivy:/root/.cache/trivy" \
               -v "$PWD/.trivyignore.yaml:/.trivyignore.yaml:ro" \
-              aquasec/trivy:0.74.0 image --severity CRITICAL \
+              aquasec/trivy:0.75.0 image --severity CRITICAL \
               --ignore-unfixed --ignorefile /.trivyignore.yaml \
               --exit-code 1 --quiet --timeout 15m "$img" \
               || failed="$failed $img"
