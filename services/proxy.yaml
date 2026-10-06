@@ -17,7 +17,7 @@ services:
   caddy:
     # Stock Caddy has no DNS providers compiled in. This build adds the
     # Cloudflare plugin, which is what makes DNS-01 possible.
-    image: ghcr.io/caddybuilds/caddy-cloudflare:2.11.6@sha256:3d6e5b2dd1dba7c921f0965b181a2dc0bfea4a9183e72638db186c22a277bbea
+    image: ghcr.io/caddybuilds/caddy-cloudflare:2.11.7@sha256:202f0928fe075b7a914703b7a4759506de6c95c33ce5a256cecbd5c44d8869d0
     container_name: caddy
     environment:
       - DOMAIN=${DOMAIN}
