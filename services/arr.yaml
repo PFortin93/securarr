@@ -11,7 +11,7 @@
 services:
   # Indexer manager — the single place indexers are configured.
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:2.6.5@sha256:f2b26429893d4c4cb71941b7ee50b1bdecd9d5f9f9e02d5410615e9f4f7c8d95
+    image: lscr.io/linuxserver/prowlarr:2.6.5@sha256:f9151e5bc1025c6d0a630d503210cdcb6bb55a7cc098562609d96a408d838902
     container_name: prowlarr
     environment:
       - PUID=${PUID}
@@ -37,7 +37,7 @@ services:
   # empty config directory would invent a new one and silently break
   # recyclarr and unpackerr, which have the old value baked in.
   sonarr:
-    image: lscr.io/linuxserver/sonarr:4.0.20@sha256:f247545d23ba8b233d6604575347e48a623fe6ad75dda02348bf81917f3b5c06
+    image: lscr.io/linuxserver/sonarr:4.0.20@sha256:dffc730adcb8b4f4342792fbb27fcad9c62fb8660523f2aeb082416980d7fe0c
     container_name: sonarr
     environment:
       - PUID=${PUID}
@@ -60,7 +60,7 @@ services:
 
   # Movies — same API key story as Sonarr above.
   radarr:
-    image: lscr.io/linuxserver/radarr:6.4.4@sha256:adb6c09d6b729ea5e642c99cea35af72702ef476bf4763f153299ac5db9f0b4f
+    image: lscr.io/linuxserver/radarr:6.4.4@sha256:7dfd049e79c00b16fbc29c3f5d96a9e7b9e73a23930b4c5b3c4541d60b366814
     container_name: radarr
     environment:
       - PUID=${PUID}
@@ -83,7 +83,7 @@ services:
 
   # Subtitles
   bazarr:
-    image: lscr.io/linuxserver/bazarr:1.6.2@sha256:8b30e81c4aec2991f469e78fae8afaa89ecc9b21a80e3897f50427216b55470c
+    image: lscr.io/linuxserver/bazarr:1.6.2@sha256:c1673816321156b904af9b7e6415ea547ae9622e4acc375358f1e1eb9ed1e904
     container_name: bazarr
     environment:
       - PUID=${PUID}
