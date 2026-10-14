@@ -110,7 +110,7 @@ services:
   # fail every sync for months without anyone noticing. Move the pin on
   # purpose, and read the release notes when you do.
   recyclarr:
-    image: ghcr.io/recyclarr/recyclarr:8.7.2@sha256:6e69e009e1cd7493ff6093e8e187b5d3788c75b4a2c0c5127b6a1beda1c19728
+    image: ghcr.io/recyclarr/recyclarr:8.8.0@sha256:b1fbb929ba718fdbdac2c1fc25b32b0ae916d7a5a0892c2068c9bfae6f1a9209
     container_name: recyclarr
     user: ${PUID}:${PGID}
     environment:
