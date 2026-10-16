@@ -30,7 +30,7 @@ services:
 
   # Playback statistics. Reaches Plex at ${PLEX_HOST}, same as Seerr.
   tautulli:
-    image: lscr.io/linuxserver/tautulli:2.18.2@sha256:bfcd2f3f6f89d2171d161ac1780723d1633f8de3c4c993d0dc52aa9edb729e16
+    image: lscr.io/linuxserver/tautulli:2.18.2@sha256:986125e67ab881504e6a71f93f8fe0932de0e1158f3060b53ca9d12ab38fa3be
     container_name: tautulli
     environment:
       - PUID=${PUID}
