@@ -13,7 +13,7 @@
 
 services:
   plex:
-    image: lscr.io/linuxserver/plex:1.43.4@sha256:3f71bd6eb6a4478ac19b11c5d0ba9746a5eacad1976f9b99ed4a2c21767e57bb
+    image: lscr.io/linuxserver/plex:1.43.5@sha256:8f655bad7dcbc5398a78f70a5af12600b4ed3424f901566ed1eaa6710e9e2334
     container_name: plex
     # Host networking, for DLNA discovery and remote access. On a host
     # that runs nothing else, this is a far smaller concession than it
