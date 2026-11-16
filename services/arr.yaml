@@ -11,7 +11,7 @@
 services:
   # Indexer manager — the single place indexers are configured.
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:2.6.5@sha256:f2b26429893d4c4cb71941b7ee50b1bdecd9d5f9f9e02d5410615e9f4f7c8d95
+    image: lscr.io/linuxserver/prowlarr:3.0.2@sha256:45117ba8439e2337a92ffe38a451a4dafc0be771754d05d88cdf102419d09646
     container_name: prowlarr
     environment:
       - PUID=${PUID}
@@ -60,7 +60,7 @@ services:
 
   # Movies — same API key story as Sonarr above.
   radarr:
-    image: lscr.io/linuxserver/radarr:6.4.4@sha256:adb6c09d6b729ea5e642c99cea35af72702ef476bf4763f153299ac5db9f0b4f
+    image: lscr.io/linuxserver/radarr:7.0.3@sha256:044788f5508b7f67a3e0368cdd142c77c4d4cd5aec2efaba53e1a68b6b6231e7
     container_name: radarr
     environment:
       - PUID=${PUID}
